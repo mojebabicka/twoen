@@ -1,3 +1,4 @@
+/.gitignore
 /test_config.xml
 /testing.py
 /twoen_sid.py
