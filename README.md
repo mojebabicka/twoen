@@ -1,6 +1,6 @@
 # Unofficial Python Module for 2N Devices
 
-Intercoms and Access Units Running 2N OS
+Intercoms and Access Units Running 2N OS (https://www.2n.cz)
 
 The module is under construction. Please be kind since it is developed by mygranny (in Czech: mojebabicka).
 
@@ -22,3 +22,5 @@ Use the device instance to call its methods. Typically, one method corresponds t
 The module logs quite extensively to the command line using the Icecream module. The logging can be completely disabled, and you can select the verbosity of the logging for success and failure (verbose logging also contains additional information — usually an error message provided in the response).
 
 Methods typically return a boolean indicating the operation's success. In some cases, response data (XML, image, etc.) are returned directly when the operation is successful. When an operation fails, you can retrieve the details in the device.failure object, which lets you handle the problem in a preferred way.
+
+Get more information on the HTTP API of devices running 2N OS: https://wiki.2n.com/hip/hapi/latest/en
