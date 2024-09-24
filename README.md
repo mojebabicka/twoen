@@ -26,6 +26,7 @@ Methods typically return a boolean indicating the operation's success. In some c
 Get more information on the HTTP API of devices running 2N OS: https://wiki.2n.com/hip/hapi/latest/en
 
 ## Example Script
+
         import twoen
 
         # Initialize a Device instance (optional: get info, uptime, switch config and capabilities)
@@ -42,6 +43,7 @@ Get more information on the HTTP API of devices running 2N OS: https://wiki.2n.c
         device.switch_ctrl(1, "on")
 
 By default the script will log the following data in command line:
+
         ic| func: 'info:...........................success'
         ic| func: 'switch_caps:....................success'
         ic| func: 'caps:...........................success'
