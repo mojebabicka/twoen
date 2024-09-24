@@ -194,6 +194,7 @@ class Device:
     def config(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves the configuration file.
+        XML is returned in case of success.
         """
         try:
             command = self.session.get(
@@ -316,5 +317,89 @@ class Device:
         except Exception as e:
             self.offline_check(e)
             self.logit(self.padding("caps:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def get_time(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Retrieves the device time and its settings.
+        Time and its settings are returned as a directory:
+        "utcTime":   int
+        "source":    string
+        "automatic": bool
+        """
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/system/time"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("get_time:") + "success", command.text, logging, verbose_success)
+            else:
+                self.logit(self.padding("get_time:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return command.json()["result"]
+        except Exception as e:
+            self.offline_check(e)
+            self.logit(self.padding("get_time:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def set_time(self, time=None, automatic=None, server=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Retrieves the device time and its settings.
+        Time and its settings are returned as a directory:
+        "utcTime":   int
+        "source":    string (URL)
+        "automatic": int (0, 1)
+        """
+        payload = ""
+        if time is not None:
+            payload += "utcTime=" + str(time)
+        if automatic is not None:
+            if payload:
+                payload += "&"
+            payload += "automatic=" + str(automatic)
+        if server is not None:
+            if payload:
+                payload += "&"
+            payload += "server=" + str(server)
+        try:
+            if not payload:
+                raise Exception("At least one parameter time, automatic or server is mandatory.")
+            if (automatic == 1 and time is not None) or (self.get_time(False)["automatic"] and (automatic == 1 or automatic is None) and time is not None):
+                raise Exception("Time mode is automatic. Switch it to manual before setting the time.")
+            command = self.session.put(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/system/time?"
+                    + payload
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id,
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("set_time:") + "success", command.text, logging, verbose_success)
+            else:
+                self.logit(self.padding("set_time:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return True
+        except Exception as e:
+            self.offline_check(e)
+            self.logit(self.padding("set_time:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
