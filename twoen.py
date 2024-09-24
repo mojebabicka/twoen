@@ -133,7 +133,7 @@ class Device:
 
             self.online = True
             if command.json()["success"]:
-                self.logit(self.padding("switch_caps ") + "success", command.text, logging, verbose_success)
+                self.logit(self.padding("switch_caps:") + "success", command.text, logging, verbose_success)
                 self.switches = []
                 for sw in command.json()["result"]["switches"]:
                     self.switches.append(sw)

@@ -24,3 +24,26 @@ The module logs quite extensively to the command line using the Icecream module.
 Methods typically return a boolean indicating the operation's success. In some cases, response data (XML, image, etc.) are returned directly when the operation is successful. When an operation fails, you can retrieve the details in the device.failure object, which lets you handle the problem in a preferred way.
 
 Get more information on the HTTP API of devices running 2N OS: https://wiki.2n.com/hip/hapi/latest/en
+
+## Example Script
+        import twoen
+
+        # Initialize a Device instance (optional: get info, uptime, switch config and capabilities)
+        device = twoen.Device("192.168.1.1", "admin", "BadPwd123")
+        device.info()
+        device.switch_caps()
+        device.caps()
+
+        # Read config and write it into a file
+        with open("test_config.xml", "wb") as f:
+            f.write(device.config())
+
+        # Activate switch one
+        device.switch_ctrl(1, "on")
+
+By default the script will log the following data in command line:
+        ic| func: 'info:...........................success'
+        ic| func: 'switch_caps:....................success'
+        ic| func: 'caps:...........................success'
+        ic| func: 'config:.........................success'
+        ic| func: 'switch_ctrl 1 on:...............success'
