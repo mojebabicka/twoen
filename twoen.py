@@ -384,11 +384,12 @@ class Device:
 
     def set_time(self, time=None, automatic=None, server=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
-        Retrieves the device time and its settings.
-        Time and its settings are returned as a directory:
-        "utcTime":   int
-        "source":    string (URL)
-        "automatic": int (0, 1)
+        Sets the device time and its settings.
+        Time and its settings are entered as URL params:
+        utcTime=int
+        source=string (URL)
+        automatic=int (0, 1)
+        At least one parameter is mandatory.
         """
         payload = ""
         if time is not None:
@@ -432,5 +433,38 @@ class Device:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("set_time:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def get_timezone_caps(self, logging=True, verbose_success=False, verbose_failure=True) -> list:
+        """
+        Retrieves the device's list of supported standard timezones. A list is returned.
+        """
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/system/timezone/caps"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("get_timezone_caps:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("get_timezone_caps:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return command.json()["result"]["timezones"]
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("get_timezone_caps:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
