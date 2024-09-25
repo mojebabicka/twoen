@@ -49,3 +49,17 @@ By default the script will log the following data in command line:
         ic| func: 'caps:...........................success'
         ic| func: 'config:.........................success'
         ic| func: 'switch_ctrl 1 on:...............success'
+
+## Error Handling
+
+By default the errors are unhandled and user is notified by icecream log and methods return False upon failure. This gives users freedom in handling errors on their own as shown in the example below.
+
+        import twoen
+
+        # Initialize a Device instance
+        device = twoen.Device("192.168.1.1", "admin", "BadPwd123")
+
+        # Activate switch one with proprietary error handling
+        assert device.switch_ctrl(1, "on"), f"Script failed in switch_crl with the following error: {device.failure}"
+
+General assertion can be activated, if user prefers. When an instance of Device is initialized, use assertion=True. All errors will be handled by twoen module and AssertionError will terminate the script upon any error.

@@ -8,13 +8,14 @@ from requests.auth import HTTPDigestAuth
 
 class Device:
 
-    def __init__(self, ip: str, uname: str, pwd: str, timeout=5):
+    def __init__(self, ip: str, uname: str, pwd: str, timeout=5, assertion=False):
         """
         Creates an instance of a 2N OS device.
         """
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
         self.session = requests.Session()
+        self.assertion = not assertion
 
         self.ip = ip
         self.auth_id = HTTPDigestAuth(uname, pwd)
@@ -78,6 +79,7 @@ class Device:
             self.failure = None
             return True
         except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("info:") + "general failure", e, logging, verbose_failure)
             self.failure = e
@@ -104,12 +106,15 @@ class Device:
                 self.logit("status: success", command.text, logging, verbose_success)
                 self.uptime = int(command.json()["result"]["upTime"])
             else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
                 self.logit(self.padding("status:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
             return True
         except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("status:") + "general failure", e, logging, verbose_failure)
             self.failure = e
@@ -138,12 +143,15 @@ class Device:
                 for sw in command.json()["result"]["switches"]:
                     self.switches.append(sw)
             else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
                 self.logit(self.padding("switch_caps:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
             return True
         except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("switch_caps:") + "general failure", e, logging, verbose_failure)
             self.failure = e
@@ -180,12 +188,15 @@ class Device:
             if command.json()["success"]:
                 self.logit(self.padding("switch_ctrl " + str(idx) + " " + action + ":") + "success", command.text, logging, verbose_success)
             else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
                 self.logit(self.padding("switch_ctrl:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
             return True
         except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("switch_ctrl:") + "general failure", e, logging, verbose_failure)
             self.failure = e
@@ -212,12 +223,15 @@ class Device:
             if command.headers["content-type"] == "application/xml":
                 self.logit(self.padding("config:") + "success", "XML received", logging, verbose_success)
             else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
                 self.logit(self.padding("config:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
             return command.content
         except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("config:") + "general failure", e, logging, verbose_failure)
             self.failure = e
@@ -242,18 +256,23 @@ class Device:
             )
 
             if type(xml) != "bytes":
+                if not self.assertion:
+                    raise Exception("assetion is enabled and the script failed with api error: Configuration must be in \"bytes\".")
                 self.logit(self.padding("upload_config:") + "data error", "Configuration must be in \"bytes\".", logging, verbose_failure)
                 self.failure = "Configuration must be in \"bytes\"."
                 return False
             elif command.json()["success"]:
                 self.logit(self.padding("upload_config") + "success", command.text, logging, verbose_success)
             else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
                 self.logit(self.padding("upload_config:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
             return True
         except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("upload_config:") + "general failure", e, logging, verbose_failure)
             self.failure = e
@@ -278,12 +297,15 @@ class Device:
             if command.json()["success"]:
                 self.logit(self.padding("restart:") + "success", command.text, logging, verbose_success)
             else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
                 self.logit(self.padding("restart:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
             return True
         except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("restart:") + "general failure", e, logging, verbose_failure)
             self.failure = e
@@ -309,12 +331,15 @@ class Device:
                 self.logit(self.padding("caps:") + "success", command.text, logging, verbose_success)
                 self.capabilities = command.json()["result"]["options"]
             else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
                 self.logit(self.padding("caps:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
             return True
         except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("caps:") + "general failure", e, logging, verbose_failure)
             self.failure = e
@@ -343,12 +368,15 @@ class Device:
             if command.json()["success"]:
                 self.logit(self.padding("get_time:") + "success", command.text, logging, verbose_success)
             else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
                 self.logit(self.padding("get_time:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
             return command.json()["result"]
         except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("get_time:") + "general failure", e, logging, verbose_failure)
             self.failure = e
@@ -393,12 +421,15 @@ class Device:
             if command.json()["success"]:
                 self.logit(self.padding("set_time:") + "success", command.text, logging, verbose_success)
             else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
                 self.logit(self.padding("set_time:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
             return True
         except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("set_time:") + "general failure", e, logging, verbose_failure)
             self.failure = e
