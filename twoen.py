@@ -468,3 +468,93 @@ class Device:
             self.logit(self.padding("get_timezone_caps:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
+
+    def get_timezone(self, logging=True, verbose_success=False, verbose_failure=True) -> dict:
+        """
+        Retrieves the device's timezone settings.
+        "automatic": boolean
+        "zone": string
+        "custom": string (None if the zone is not custom)
+        """
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/system/timezone"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("get_timezone:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("get_timezone:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            tz_dataset = command.json()["result"]
+            tz_dataset["custom"] = tz_dataset.get("custom")
+            return tz_dataset
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("get_timezone:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def set_timezone(self, automatic=1, zone=None, custom=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Sets the device timezone and its settings.
+        Timezone and its settings are entered as URL params:
+        automatic=int (0, 1)
+        zone=string (zone name, use get_timezone_caps for the list of names)
+        custom=string (definition string of custom timezone, e.g., UTC0)
+        Call the method without any parameters to set the automatic timezone mode.
+        Call the method with zone (and custom) parameter to set manual timezone (timezone mode is automatically se to Manual, regardless of the automatic parameter)
+        """
+        payload = ""
+        if zone is None:
+            payload += "automatic=" + str(automatic)
+        elif zone != "custom":
+            payload += "automatic=0&zone=" + zone
+        else:
+            payload += "automatic=0&zone=" + zone + "&custom=" + custom
+
+        try:
+            if (zone != "custom" and custom is not None):
+                raise Exception("To configure custom rule the timezone needs to be set to \"custom\".")
+            if (zone == "custom" and custom is None):
+                raise Exception("Custom rule needs to be defined when the timezone is set to \"custom\".")
+            command = self.session.put(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/system/timezone?"
+                    + payload
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id,
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("set_timezone:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("set_timezone:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("set_timezone:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
