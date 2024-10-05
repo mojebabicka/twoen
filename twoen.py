@@ -202,7 +202,7 @@ class Device:
             self.failure = e
             return False
 
-    def config(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def config_download(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves the configuration file.
         XML is returned in case of success.
@@ -237,10 +237,16 @@ class Device:
             self.failure = e
             return False
 
-    def upload_config(self, xml, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def config_upload(self, xml, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Uploads XML configuration file.
         """
+        if type(xml) is not bytes:
+            if not self.assertion:
+                raise Exception("assetion is enabled and the script failed with api error: Configuration must be in \"bytes\".")
+            self.logit(self.padding("upload_config:") + "data error", "Configuration must be in \"bytes\".", logging, verbose_failure)
+            self.failure = "Configuration must be in \"bytes\"."
+            return False
         try:
             command = self.session.put(
                 (
@@ -255,13 +261,7 @@ class Device:
                 auth=self.auth_id
             )
 
-            if type(xml) != "bytes":
-                if not self.assertion:
-                    raise Exception("assetion is enabled and the script failed with api error: Configuration must be in \"bytes\".")
-                self.logit(self.padding("upload_config:") + "data error", "Configuration must be in \"bytes\".", logging, verbose_failure)
-                self.failure = "Configuration must be in \"bytes\"."
-                return False
-            elif command.json()["success"]:
+            if command.json()["success"]:
                 self.logit(self.padding("upload_config") + "success", command.text, logging, verbose_success)
             else:
                 if not self.assertion:
@@ -567,7 +567,15 @@ class Device:
         version - version number read from the file header
         downgrade - bool informing on whether the device will be downgraded
         note - upgrade warning text for user's consideration
+
+        Timeout for this operation is modified to self.timeout + 120
         """
+        if type(fw) is not bytes:
+            if not self.assertion:
+                raise Exception("assetion is enabled and the script failed with api error: Firmware must be in \"bytes\".")
+            self.logit(self.padding("firmware_upload:") + "data error", "Firmware must be in \"bytes\".", logging, verbose_failure)
+            self.failure = "Firmware must be in \"bytes\"."
+            return False
         try:
             command = self.session.put(
                 (
@@ -575,20 +583,14 @@ class Device:
                     + self.ip
                     + "/api/firmware"
                 ),
-                timeout=self.timeout,
+                timeout=self.timeout + 120,
                 verify=False,
                 headers={"Content-Type": "application/octet-stream"},
                 data=fw,
                 auth=self.auth_id
             )
 
-            if type(fw) != "bytes":
-                if not self.assertion:
-                    raise Exception("assetion is enabled and the script failed with api error: Firmware must be in \"bytes\".")
-                self.logit(self.padding("firmware_upload:") + "data error", "Firmware must be in \"bytes\".", logging, verbose_failure)
-                self.failure = "Firmware must be in \"bytes\"."
-                return False
-            elif command.json()["success"]:
+            if command.json()["success"]:
                 self.logit(self.padding("firmware_upload:") + "success", command.text, logging, verbose_success)
             else:
                 if not self.assertion:
@@ -604,10 +606,9 @@ class Device:
 
             if not direct:
                 return version_info
-            else:
-                self.firmware_confirm(version_info["fwid"])
-                self.failure = None
-                return True
+            self.firmware_confirm(version_info["fwid"])
+            self.failure = None
+            return True
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
@@ -624,7 +625,7 @@ class Device:
                 (
                     "https://"
                     + self.ip
-                    + "/api/firmware/apply?fileId="
+                    + "/api/firmware/apply?fileid="
                     + fwid
                 ),
                 timeout=self.timeout,
