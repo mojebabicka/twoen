@@ -29,26 +29,26 @@ Get more information on the HTTP API of devices running 2N OS: https://wiki.2n.c
 
         import twoen
 
-        # Initialize a Device instance (optional: get info, uptime, switch config and capabilities)
+        # Initialize a Device instance (optional: get info, uptime, switch config, status and mode and capabilities)
         device = twoen.Device("192.168.1.1", "admin", "BadPwd123")
-        device.info()
-        device.switch_caps()
-        device.caps()
+        device.info_get()
+        device.switches_get()
+        device.caps_get()
 
         # Read config and write it into a file
         with open("test_config.xml", "wb") as f:
-            f.write(device.config())
+            f.write(device.config_download())
 
         # Activate switch one
-        device.switch_ctrl(1, "on")
+        device.switches_set(1, "on")
 
 By default the script will log the following data in command line:
 
-        ic| func: 'info:...........................success'
-        ic| func: 'switch_caps:....................success'
-        ic| func: 'caps:...........................success'
-        ic| func: 'config:.........................success'
-        ic| func: 'switch_ctrl 1 on:...............success'
+        ic| func: 'info_get:.......................success'
+        ic| func: 'switches_get:...................success'
+        ic| func: 'caps_get:.......................success'
+        ic| func: 'config_download:................success'
+        ic| func: 'switches_set 1 on:..............success'
 
 ## Error Handling
 
@@ -60,6 +60,6 @@ By default the errors are unhandled and user is notified by icecream log and met
         device = twoen.Device("192.168.1.1", "admin", "BadPwd123")
 
         # Activate switch one with proprietary error handling
-        assert device.switch_ctrl(1, "on"), f"Script failed in switch_crl with the following error: {device.failure}"
+        assert device.switches_set(1, "on"), f"Script failed in switches_set with the following error: {device.failure}"
 
 General assertion can be activated, if user prefers. When an instance of Device is initialized, use assertion=True. All errors will be handled by twoen module and AssertionError will terminate the script upon any error.

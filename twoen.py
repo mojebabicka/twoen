@@ -55,7 +55,7 @@ class Device:
         elif logging:
             ic.ic(func)
 
-    def info(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def info_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves basic information about the device (model, name, fw version
         and build type).
@@ -75,17 +75,17 @@ class Device:
             self.name = command.json()["result"]["deviceName"]
             self.fw_version = command.json()["result"]["swVersion"]
             self.build_type = command.json()["result"]["buildType"]
-            self.logit(self.padding("info:") + "success", command.text, logging, verbose_success)
+            self.logit(self.padding("info_get:") + "success", command.text, logging, verbose_success)
             self.failure = None
             return True
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
-            self.logit(self.padding("info:") + "general failure", e, logging, verbose_failure)
+            self.logit(self.padding("info_get:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
-    def status(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def status_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves uptime of the device.
         """
@@ -103,12 +103,12 @@ class Device:
 
             self.online = True
             if command.json()["success"]:
-                self.logit("status: success", command.text, logging, verbose_success)
+                self.logit("status_get: success", command.text, logging, verbose_success)
                 self.uptime = int(command.json()["result"]["upTime"])
             else:
                 if not self.assertion:
                     raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
-                self.logit(self.padding("status:") + "api error", command.text, logging, verbose_failure)
+                self.logit(self.padding("status_get:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
@@ -116,20 +116,39 @@ class Device:
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
-            self.logit(self.padding("status:") + "general failure", e, logging, verbose_failure)
+            self.logit(self.padding("status_get:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
-    def switch_caps(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def switches_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
-        Retrieves number of switches and their basic settings.
+        Retrieves number of switches, their states, operation mode and basic settings.
+        swich - int, indicates number of the switch (indexed from 1, corresponds to the order in the list)
+        enabled - bool, if the the switch is disabled, it cannot be used and controlled
+        mode - string, monostable or bistable indicating the switch mode (None if the switch is disabled)
+        switchOnDuration - int, number of seconds the switch is activated (None if the switch is disabled)
+        type - string, normal, inverted, security (type of output control) (None if the switch is disabled)
+        active - bool, switch state
+        locked - bool, switch operation locked
+        held - bool, switch operation held
         """
         try:
             command = self.session.get(
                 (
                     "https://"
                     + self.ip
-                    + "/api/switch/caps?"
+                    + "/api/switch/caps"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            command2 = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/switch/status"
                 ),
                 timeout=self.timeout,
                 verify=False,
@@ -138,14 +157,18 @@ class Device:
 
             self.online = True
             if command.json()["success"]:
-                self.logit(self.padding("switch_caps:") + "success", command.text, logging, verbose_success)
+                self.logit(self.padding("switches_get:") + "success", command.text + "|" + command2.text, logging, verbose_success)
                 self.switches = []
-                for sw in command.json()["result"]["switches"]:
-                    self.switches.append(sw)
+                for sw_cap, sw_status in zip(command.json()["result"]["switches"], command2.json()["result"]["switches"]):
+                    self.switches.append(sw_cap)
+                    for key in sw_status.keys():
+                        self.switches[-1][key] = sw_status[key]
+                    for key in ["mode", "switchOnDuration", "type"]:
+                        self.switches[-1][key] = self.switches[-1].get(key)
             else:
                 if not self.assertion:
                     raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
-                self.logit(self.padding("switch_caps:") + "api error", command.text, logging, verbose_failure)
+                self.logit(self.padding("switches_get:") + "api error", command.text + "|" + command2.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
@@ -153,11 +176,11 @@ class Device:
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
-            self.logit(self.padding("switch_caps:") + "general failure", e, logging, verbose_failure)
+            self.logit(self.padding("switches_get:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
-    def switch_ctrl(self, idx, action, hold_timeout=0, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def switches_set(self, idx, action, hold_timeout=0, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Controls the device switch (get available switches using device.switches).
         Available actions:
@@ -186,11 +209,11 @@ class Device:
 
             self.online = True
             if command.json()["success"]:
-                self.logit(self.padding("switch_ctrl " + str(idx) + " " + action + ":") + "success", command.text, logging, verbose_success)
+                self.logit(self.padding("switches_set " + str(idx) + " " + action + ":") + "success", command.text, logging, verbose_success)
             else:
                 if not self.assertion:
                     raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
-                self.logit(self.padding("switch_ctrl:") + "api error", command.text, logging, verbose_failure)
+                self.logit(self.padding("switches_set:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
@@ -198,7 +221,7 @@ class Device:
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
-            self.logit(self.padding("switch_ctrl:") + "general failure", e, logging, verbose_failure)
+            self.logit(self.padding("switches_set:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
@@ -311,7 +334,7 @@ class Device:
             self.failure = e
             return False
 
-    def caps(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def caps_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves the capabilities of the device.
         """
@@ -345,7 +368,7 @@ class Device:
             self.failure = e
             return False
 
-    def get_time(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def time_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves the device time and its settings.
         Time and its settings are returned as a directory:
@@ -366,11 +389,11 @@ class Device:
             )
 
             if command.json()["success"]:
-                self.logit(self.padding("get_time:") + "success", command.text, logging, verbose_success)
+                self.logit(self.padding("time_get:") + "success", command.text, logging, verbose_success)
             else:
                 if not self.assertion:
                     raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
-                self.logit(self.padding("get_time:") + "api error", command.text, logging, verbose_failure)
+                self.logit(self.padding("time_get:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
@@ -378,11 +401,11 @@ class Device:
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
-            self.logit(self.padding("get_time:") + "general failure", e, logging, verbose_failure)
+            self.logit(self.padding("time_get:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
-    def set_time(self, time=None, automatic=None, server=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def time_set(self, time=None, automatic=None, server=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Sets the device time and its settings.
         Time and its settings are entered as URL params:
@@ -405,7 +428,7 @@ class Device:
         try:
             if not payload:
                 raise Exception("At least one parameter time, automatic or server is mandatory.")
-            if (automatic == 1 and time is not None) or (self.get_time(False)["automatic"] and (automatic == 1 or automatic is None) and time is not None):
+            if (automatic == 1 and time is not None) or (self.time_get(False)["automatic"] and (automatic == 1 or automatic is None) and time is not None):
                 raise Exception("Time mode is automatic. Switch it to manual before setting the time.")
             command = self.session.put(
                 (
@@ -420,11 +443,11 @@ class Device:
             )
 
             if command.json()["success"]:
-                self.logit(self.padding("set_time:") + "success", command.text, logging, verbose_success)
+                self.logit(self.padding("time_set:") + "success", command.text, logging, verbose_success)
             else:
                 if not self.assertion:
                     raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
-                self.logit(self.padding("set_time:") + "api error", command.text, logging, verbose_failure)
+                self.logit(self.padding("time_set:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
@@ -432,11 +455,11 @@ class Device:
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
-            self.logit(self.padding("set_time:") + "general failure", e, logging, verbose_failure)
+            self.logit(self.padding("time_set:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
-    def get_timezone_caps(self, logging=True, verbose_success=False, verbose_failure=True) -> list:
+    def timezone_caps_get(self, logging=True, verbose_success=False, verbose_failure=True) -> list:
         """
         Retrieves the device's list of supported standard timezones. A list is returned.
         """
@@ -453,11 +476,11 @@ class Device:
             )
 
             if command.json()["success"]:
-                self.logit(self.padding("get_timezone_caps:") + "success", command.text, logging, verbose_success)
+                self.logit(self.padding("timezone_caps_get:") + "success", command.text, logging, verbose_success)
             else:
                 if not self.assertion:
                     raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
-                self.logit(self.padding("get_timezone_caps:") + "api error", command.text, logging, verbose_failure)
+                self.logit(self.padding("timezone_caps_get:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
@@ -465,11 +488,11 @@ class Device:
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
-            self.logit(self.padding("get_timezone_caps:") + "general failure", e, logging, verbose_failure)
+            self.logit(self.padding("timezone_caps_get:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
-    def get_timezone(self, logging=True, verbose_success=False, verbose_failure=True) -> dict:
+    def timezone_get(self, logging=True, verbose_success=False, verbose_failure=True) -> dict:
         """
         Retrieves the device's timezone settings.
         "automatic": boolean
@@ -489,11 +512,11 @@ class Device:
             )
 
             if command.json()["success"]:
-                self.logit(self.padding("get_timezone:") + "success", command.text, logging, verbose_success)
+                self.logit(self.padding("timezone_get:") + "success", command.text, logging, verbose_success)
             else:
                 if not self.assertion:
                     raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
-                self.logit(self.padding("get_timezone:") + "api error", command.text, logging, verbose_failure)
+                self.logit(self.padding("timezone_get:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
@@ -503,16 +526,16 @@ class Device:
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
-            self.logit(self.padding("get_timezone:") + "general failure", e, logging, verbose_failure)
+            self.logit(self.padding("timezone_get:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
-    def set_timezone(self, automatic=1, zone=None, custom=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def timezone_set(self, automatic=1, zone=None, custom=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Sets the device timezone and its settings.
         Timezone and its settings are entered as URL params:
         automatic=int (0, 1)
-        zone=string (zone name, use get_timezone_caps for the list of names)
+        zone=string (zone name, use timezone_caps_get for the list of names)
         custom=string (definition string of custom timezone, e.g., UTC0)
         Call the method without any parameters to set the automatic timezone mode.
         Call the method with zone (and custom) parameter to set manual timezone (timezone mode is automatically se to Manual, regardless of the automatic parameter)
@@ -543,11 +566,11 @@ class Device:
             )
 
             if command.json()["success"]:
-                self.logit(self.padding("set_timezone:") + "success", command.text, logging, verbose_success)
+                self.logit(self.padding("timezone_set:") + "success", command.text, logging, verbose_success)
             else:
                 if not self.assertion:
                     raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
-                self.logit(self.padding("set_timezone:") + "api error", command.text, logging, verbose_failure)
+                self.logit(self.padding("timezone_set:") + "api error", command.text, logging, verbose_failure)
                 self.failure = command.text
                 return False
             self.failure = None
@@ -555,7 +578,7 @@ class Device:
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
-            self.logit(self.padding("set_timezone:") + "general failure", e, logging, verbose_failure)
+            self.logit(self.padding("timezone_set:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
@@ -568,7 +591,9 @@ class Device:
         downgrade - bool informing on whether the device will be downgraded
         note - upgrade warning text for user's consideration
 
-        Timeout for this operation is modified to self.timeout + 120
+        Timeout for this operation is modified to self.timeout + 120.
+
+        The uploaded firmware is stored and can be confirmed for 30 s after the upload.
         """
         if type(fw) is not bytes:
             if not self.assertion:
@@ -606,6 +631,7 @@ class Device:
 
             if not direct:
                 return version_info
+            self.logit("firmware will be confirmed automatically (direct=True)")
             self.firmware_confirm(version_info["fwid"])
             self.failure = None
             return True
@@ -646,5 +672,75 @@ class Device:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("firmware_confirm:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def firmware_reject(self, fwid, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Rejects uploaded firmware file with fwid - another firmware file can be uploaded immediately.
+        """
+        try:
+            command = self.session.post(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/firmware/reject?fileid="
+                    + fwid
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+            if command.json()["success"]:
+                self.logit(self.padding("firmware_reject:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("firmware_reject:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("firmware_reject:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def factory_reset(self, sections=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Reset the device to the factory default configuration.
+        Using parameter sections=network all network parameters will be also reset. If the parameter is not specified, network parameters are not reset.
+        """
+        params = ""
+        if sections == "network":
+            params = "?sections=network"
+        try:
+            command = self.session.post(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/config/factoryreset"
+                    + params
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+            if command.json()["success"]:
+                self.logit(self.padding("factory_reset:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("factory_reset:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("factory_reset:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
