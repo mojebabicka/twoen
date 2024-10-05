@@ -558,3 +558,92 @@ class Device:
             self.logit(self.padding("set_timezone:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
+
+    def firmware_upload(self, fw, direct=True, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Uploads firmware binary file. Use direct to apply the firmware immediately (by default True).
+        If direct=False => fwid, version, downgrade and upgrade warning is returned in a dict for individual handling.
+        fwid - identifier of the version used for confirmation or rejection
+        version - version number read from the file header
+        downgrade - bool informing on whether the device will be downgraded
+        note - upgrade warning text for user's consideration
+        """
+        try:
+            command = self.session.put(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/firmware"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                headers={"Content-Type": "application/octet-stream"},
+                data=fw,
+                auth=self.auth_id
+            )
+
+            if type(fw) != "bytes":
+                if not self.assertion:
+                    raise Exception("assetion is enabled and the script failed with api error: Firmware must be in \"bytes\".")
+                self.logit(self.padding("firmware_upload:") + "data error", "Firmware must be in \"bytes\".", logging, verbose_failure)
+                self.failure = "Firmware must be in \"bytes\"."
+                return False
+            elif command.json()["success"]:
+                self.logit(self.padding("firmware_upload:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("firmware_upload:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            version_info = dict()
+            version_info["fwid"] = command.json()["result"]["fileId"]
+            version_info["version"] = command.json()["result"]["version"]
+            version_info["downgrade"] = command.json()["result"]["downgrade"]
+            version_info["note"] = command.json()["result"]["note"]
+
+            if not direct:
+                return version_info
+            else:
+                self.firmware_confirm(version_info["fwid"])
+                self.failure = None
+                return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("firmware_upload:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def firmware_confirm(self, fwid, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Confirms uploaded firmware file with fwid to be applied to the device.
+        """
+        try:
+            command = self.session.post(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/firmware/apply?fileId="
+                    + fwid
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+            if command.json()["success"]:
+                self.logit(self.padding("firmware_confirm:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("firmware_confirm:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("firmware_confirm:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
