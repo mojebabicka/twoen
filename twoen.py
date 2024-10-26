@@ -30,6 +30,8 @@ class Device:
         self.build_type = "unknown"
         self.switches = ["uninitialized"]
         self.capabilities = "unknown"
+        self.phone_accounts = ["uninitialized"]
+        self.phone_sessions = ["uninitialized"]
 
     def padding(self, text:str) -> str:
         """
@@ -742,5 +744,73 @@ class Device:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("factory_reset:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def phone_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Retrieves status of SIP accounts and their calls (if there are any).
+        List of accounts is populated. List of sessions is populated. Get them from the Device object.
+        It is not possible to pair sessions with their respective accounts at the moment.
+
+        phone_accounts is a list and contains a dict for each account with the following keys:
+        - account (account ID indexed from 1)
+        - accountType (string: general, local, msteams)
+        - enabled (bool)
+        - sipNumber (SIP URL, string)
+        - registrationEnabled (bool)
+        - registered (bool or None when the account does not support registration)
+        - registerTime (int or None when the account is not registred)
+
+        phone_sessions is a list and contains a dict for each session (call) with the following keys:
+        - calls (list of individual calls in a session, contains id (int), call type identifier, SIP URL and call state)
+        - session (session ID indexed from 1)
+        - direction (string: incoming or outgoing)
+        - state (string: connecting, ringing, connected)
+        Currently, there can be only one session in 2N OS devices. The list is empty if there is no session.
+        """
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/phone/status"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            command2 = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/call/status"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            self.online = True
+            if command.json()["success"]:
+                self.logit(self.padding("phone_get:") + "success", command.text + "|" + command2.text, logging, verbose_success)
+                self.phone_accounts = command.json()["result"]["accounts"]
+                self.phone_sessions = command2.json()["result"]["sessions"]
+                for account in self.phone_accounts:
+                    account["registerTime"] = account.get("registerTime")
+                    account["registered"] = account.get("registered")
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("phone_get:") + "api error", command.text + "|" + command2.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("phone_get:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
