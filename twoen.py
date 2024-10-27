@@ -759,7 +759,7 @@ class Device:
         - enabled (bool)
         - sipNumber (SIP URL, string)
         - registrationEnabled (bool)
-        - registered (bool or None when the account does not support registration)
+        - registered (bool)
         - registerTime (int or None when the account is not registred)
 
         phone_sessions is a list and contains a dict for each session (call) with the following keys:
@@ -792,14 +792,28 @@ class Device:
                 auth=self.auth_id
             )
 
+            command3 = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/phone/config"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
             self.online = True
-            if command.json()["success"]:
-                self.logit(self.padding("phone_get:") + "success", command.text + "|" + command2.text, logging, verbose_success)
-                self.phone_accounts = command.json()["result"]["accounts"]
+            if command.json()["success"] and command2.json()["success"] and command3.json()["success"]:
+                self.logit(self.padding("phone_get:") + "success", command.text + "|" + command2.text + "|" + command3.text, logging, verbose_success)
                 self.phone_sessions = command2.json()["result"]["sessions"]
+                self.phone_accounts = []
+                for ph_status, ph_config in zip(command.json()["result"]["accounts"], command3.json()["result"]["accounts"]):
+                    self.phone_accounts.append(ph_status)
+                    for key in ph_config.keys():
+                        self.phone_accounts[-1][key] = ph_config[key]
                 for account in self.phone_accounts:
                     account["registerTime"] = account.get("registerTime")
-                    account["registered"] = account.get("registered")
             else:
                 if not self.assertion:
                     raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
