@@ -756,11 +756,20 @@ class Device:
         phone_accounts is a list and contains a dict for each account with the following keys:
         - account (account ID indexed from 1)
         - accountType (string: general, local, msteams)
+        - answerMode (int according to enum)
+        - authId (string)
+        - displayName (string)
+        - domain (string)
+        - domainPort (int, 0 means default port for individual SIP accounts)
         - enabled (bool)
+        - proxyAddress (string)
+        - proxyPort (int, 0 means default port for individual SIP accounts)
         - sipNumber (SIP URL, string)
         - registrationEnabled (bool)
         - registered (bool)
         - registerTime (int or None when the account is not registred)
+        - registrarAddress (string)
+        - registrarPort (int, 0 means default port for individual SIP accounts)
 
         phone_sessions is a list and contains a dict for each session (call) with the following keys:
         - calls (list of individual calls in a session, contains id (int), call type identifier, SIP URL and call state)
