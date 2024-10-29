@@ -837,3 +837,81 @@ class Device:
             self.logit(self.padding("phone_get:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
+
+    def phone_set(self, payload, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Sets parameters of SIP accounts.
+        Current configuration is retrieved and unchanged parameters are used from the configuration.
+
+        The following parameters can be configured (enter as a list of dicts):
+        - account (mandatory, account ID indexed from 1)
+        - enabled (bool)
+        - answerMode (int according to enum)
+        - authId (string)
+        - displayName (string)
+        - domain (string)
+        - domainPort (int, 0 means default port for individual SIP accounts)
+        - proxyAddress (string)
+        - proxyPort (int, 0 means default port for individual SIP accounts)
+        - sipNumber (SIP URL, string)
+        - registrationEnabled (bool)
+        - registrarAddress (string)
+        - registrarPort (int, 0 means default port for individual SIP accounts)
+        """
+        keys = [
+            "account",
+            "enabled",
+            "answerMode",
+            "authId",
+            "displayName",
+            "domain",
+            "domainPort",
+            "proxyAddress",
+            "proxyPort",
+            "sipNumber",
+            "registrationEnabled",
+            "registrarAddress",
+            "registrarPort"
+        ]
+        try:
+            self.logit("phone_set gets current phone config before configuration change", "", True)
+            self.phone_get()
+            for account in payload:
+                if "account" not in account.keys():
+                    raise Exception("Account ID must be present in each configuration data set.")
+                for key in self.phone_accounts[0]:
+                    if key not in keys:
+                        account[key] = self.phone_accounts[account["account"]-1][key]
+            payload = {
+                "accounts": payload
+            }
+            command = self.session.put(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/phone/config"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                json=payload,
+                auth=self.auth_id,
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("phone_set:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("phone_set:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            self.logit("phone_set gets current phone config after configuration change", "", True)
+            self.phone_get()
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("phone_set:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
