@@ -262,27 +262,21 @@ class Device:
             self.failure = e
             return False
 
-    def config_upload(self, xml, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def config_upload(self, xml, password="", logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Uploads XML configuration file.
         """
-        if type(xml) is not bytes:
-            if not self.assertion:
-                raise Exception("assetion is enabled and the script failed with api error: Configuration must be in \"bytes\".")
-            self.logit(self.padding("upload_config:") + "data error", "Configuration must be in \"bytes\".", logging, verbose_failure)
-            self.failure = "Configuration must be in \"bytes\"."
-            return False
         try:
             command = self.session.put(
                 (
                     "https://"
                     + self.ip
-                    + "/api/config"
+                    + "/api/config?password="
+                    + password
                 ),
                 timeout=self.timeout,
                 verify=False,
-                headers={"Content-Type": "application/xml"},
-                data=xml,
+                files = {"blob-cfg": xml},
                 auth=self.auth_id
             )
 
@@ -913,5 +907,83 @@ class Device:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("phone_set:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def cacert_upload(self, cert, id="", logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Uploads
+        """
+        if id:
+            id = "@" + id
+        if type(cert) is not bytes:
+            if not self.assertion:
+                raise Exception("assetion is enabled and the script failed with api error: Certificate must be in \"bytes\".")
+            self.logit(self.padding("cacert_upload:") + "data error", "Certificate must be in \"bytes\".", logging, verbose_failure)
+            self.failure = "Certificate must be in \"bytes\"."
+            return False
+        try:
+            command = self.session.put(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/cert/ca?id="
+                    + id
+                ),
+                timeout=self.timeout + 120,
+                verify=False,
+                files = {"blob-cert": ("blob-cert", cert)},
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("cacert_upload:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("cacert_upload:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("cacert_upload:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def cacert_list(self, logging=True, verbose_success=False, verbose_failure=True) -> list:
+        """
+        Retrieves
+        """
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/cert/ca"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("cacert_list:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("cacert_list:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return command.json()["result"]["certificates"]
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("cacert_list:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
