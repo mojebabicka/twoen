@@ -976,6 +976,57 @@ class Device:
             self.failure = e
             return False
 
+    def phone_dial(self, number=None, users=None, logging=True, verbose_success=False, verbose_failure=True) -> int:
+        """
+        Dials a number, user or list of users
+        Exactly one parameter (numbers or users) is mandatory.
+        Enter a single number as a SIP URI.
+        Enter one or multiple users as a list of strings representing uuids.
+
+        Returns the session identifier, which can be used for monitoring of the session with phone_get or to hang it up with phone_hangup.
+        """
+        try:
+            if number is not None and users is not None:
+                raise Exception("Exactly one parameter numbers or users is mandatory.")
+            payload = ""
+            if number is not None:
+                payload += "number=" + number
+            if users is not None:
+                payload += "users="
+                for user in users:
+                    payload += user + ","
+                payload = payload[:-1]
+            if not payload:
+                raise Exception("Exactly one parameter numbers or users is mandatory.")
+            command = self.session.post(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/call/dial?"
+                    + payload
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id,
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("phone_dial:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("phone_dial:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return command.json()["result"]["session"]
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("phone_dial:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
     def cacert_upload(self, cert, id="", logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Uploads a CA certificate.
