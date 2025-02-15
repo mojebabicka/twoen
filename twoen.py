@@ -29,6 +29,8 @@ class Device:
         self.fw_version = "unknown"
         self.build_type = "unknown"
         self.switches = ["uninitialized"]
+        self.inputs = ["uninitialized"]
+        self.outputs = ["uninitialized"]
         self.capabilities = "unknown"
         self.phone_accounts = ["uninitialized"]
         self.phone_sessions = ["uninitialized"]
@@ -125,7 +127,7 @@ class Device:
     def switches_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves number of switches, their states, operation mode and basic settings.
-        swich - int, indicates number of the switch (indexed from 1, corresponds to the order in the list)
+        switch - int, indicates number of the switch (indexed from 1, corresponds to the order in the list)
         enabled - bool, if the the switch is disabled, it cannot be used and controlled
         mode - string, monostable or bistable indicating the switch mode (None if the switch is disabled)
         switchOnDuration - int, number of seconds the switch is activated (None if the switch is disabled)
@@ -224,6 +226,70 @@ class Device:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("switches_set:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def io_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Retrieves number of inputs and outputs and their states.
+        Input information can be retrieved by getting device.inputs.
+        Ouput information can be retrieved by getting device.outputs.
+        """
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/io/caps"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            command2 = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/io/status"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            self.online = True
+            if command.json()["success"]:
+                self.logit(self.padding("io_get:") + "success", command.text + "|" + command2.text, logging, verbose_success)
+                self.inputs = []
+                self.outputs = []
+                for io_cap, io_status in zip(command.json()["result"]["ports"], command2.json()["result"]["ports"]):
+                    if io_cap["type"] == "input":
+                        self.inputs.append(
+                            {
+                                "label": io_cap["port"],
+                                "status": io_status["state"] == 1
+                            }
+                        )
+                    elif io_cap["type"] == "output":
+                        self.outputs.append(
+                            {
+                                "label": io_cap["port"],
+                                "status": io_status["state"] == 1
+                            }
+                        )
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("io_get:") + "api error", command.text + "|" + command2.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("io_get:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
