@@ -912,10 +912,13 @@ class Device:
 
     def cacert_upload(self, cert, id="", logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
-        Uploads
+        Uploads a CA certificate.
+
+        Use id without @ (it is automatically added).
+        The certificate file is loaded as bytes object.
         """
         if id:
-            id = "@" + id
+            id = "?id=@" + id
         if type(cert) is not bytes:
             if not self.assertion:
                 raise Exception("assetion is enabled and the script failed with api error: Certificate must be in \"bytes\".")
@@ -927,7 +930,7 @@ class Device:
                 (
                     "https://"
                     + self.ip
-                    + "/api/cert/ca?id="
+                    + "/api/cert/ca"
                     + id
                 ),
                 timeout=self.timeout + 120,
@@ -956,7 +959,9 @@ class Device:
 
     def cacert_list(self, logging=True, verbose_success=False, verbose_failure=True) -> list:
         """
-        Retrieves
+        Retrieves a list of CA certificates in the device.
+
+        The list contains all information about certificates (see 2N HTTP API documentation for more information).
         """
         try:
             command = self.session.get(
@@ -985,5 +990,164 @@ class Device:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("cacert_list:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def cacert_delete(self, id, logging=True, verbose_success=False, verbose_failure=True) -> list:
+        """
+        Deletes a CA certificate.
+
+        Get the id (or use the fingerprint as id) to select the certificate. Get the list of certificate by using carcert_list.
+        If the id is entered externally (it is not retrieved from cacert_list), enter it with the prefix @.
+        """
+        try:
+            command = self.session.delete(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/cert/ca?id="
+                    + id
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("cacert_delete:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("cacert_delete:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("cacert_delete:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def usercert_upload(self, cert, pk, id="", logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Uploads a user certificate.
+
+        Use id without @ (it is automatically added).
+        The certificate and key file is loaded as bytes object.
+        """
+        if id:
+            id = "?id=@" + id
+        if type(cert) is not bytes or type(pk) is not bytes:
+            if not self.assertion:
+                raise Exception("assetion is enabled and the script failed with api error: Certificate or key must be in \"bytes\".")
+            self.logit(self.padding("usercert_upload:") + "data error", "Certificate or key must be in \"bytes\".", logging, verbose_failure)
+            self.failure = "Certificate or key must be in \"bytes\"."
+            return False
+        try:
+            command = self.session.put(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/cert/user"
+                    + id
+                ),
+                timeout=self.timeout + 120,
+                verify=False,
+                files = {"blob-cert": ("blob-cert", cert), "blob-pk": ("blob-pk", pk)},
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("usercert_upload:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("usercert_upload:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("usercert_upload:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def usercert_list(self, logging=True, verbose_success=False, verbose_failure=True) -> list:
+        """
+        Retrieves a list of user certificates in the device.
+
+        The list contains all information about certificates (see 2N HTTP API documentation for more information).
+        """
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/cert/user"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("usercert_list:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("usercert_list:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return command.json()["result"]["certificates"]
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("usercert_list:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def usercert_delete(self, id, logging=True, verbose_success=False, verbose_failure=True) -> list:
+        """
+        Deletes a user certificate.
+
+        Get the id (or use the fingerprint as id) to select the certificate. Get the list of certificate by using usercert_list.
+        If the id is entered externally (it is not retrieved from usercert_list), enter it with the prefix @.
+        """
+        try:
+            command = self.session.delete(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/cert/user?id="
+                    + id
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("usercert_delete:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("usercert_delete:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("usercert_delete:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
