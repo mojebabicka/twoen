@@ -31,9 +31,14 @@ class Device:
         self.switches = ["uninitialized"]
         self.inputs = ["uninitialized"]
         self.outputs = ["uninitialized"]
-        self.capabilities = "unknown"
+        self.capabilities = {"uninitialized": "uninitialized"}
         self.phone_accounts = ["uninitialized"]
         self.phone_sessions = ["uninitialized"]
+        self.camera_resolutions = ["uninitialized"]
+        self.camera_sources = ["uninitialized"]
+        self.log_events = ["uninitialized"]
+
+        self._fixed_caps_get()
 
     def padding(self, text:str) -> str:
         """
@@ -58,6 +63,56 @@ class Device:
             ic.ic(func, message)
         elif logging:
             ic.ic(func)
+
+    def _fixed_caps_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Retrieves all capabilities of a device that are fixed.
+
+        TODO: Test with a device without a camera support
+        """
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/camera/caps"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            command2 = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/log/caps"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            self.online = True
+            if command.json()["success"] and command2.json()["success"]:
+                self.logit(self.padding("init_fixed_caps_get:") + "success", command.text + "|" + command2.text, logging, verbose_success)
+                self.camera_resolutions = command.json()["result"]["jpegResolution"]
+                self.camera_sources = [source["source"] for source in command.json()["result"]["sources"]]
+                self.log_events = command2.json()["result"]["events"]
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("init_fixed_caps_get:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("init_fixed_caps_get:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
 
     def info_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
@@ -107,7 +162,7 @@ class Device:
 
             self.online = True
             if command.json()["success"]:
-                self.logit("status_get: success", command.text, logging, verbose_success)
+                self.logit(self.padding("status_get:") + "success", command.text, logging, verbose_success)
                 self.uptime = int(command.json()["result"]["upTime"])
             else:
                 if not self.assertion:
@@ -398,7 +453,7 @@ class Device:
 
     def caps_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
         """
-        Retrieves the capabilities of the device.
+        Retrieves the system capabilities of the device.
         """
         try:
             command = self.session.get(
