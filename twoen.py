@@ -1032,7 +1032,7 @@ class Device:
         Hangs up a call in an active session.
 
         Use session id to select the session (phone_get and device.sessions to identify the session).
-        Alternatively, you can select the termination reason: normal (default), rejected, busy, noanswer.
+        Optionally, you can select the termination reason: normal (default), rejected, busy, noanswer.
         """
         try:
             command = self.session.post(
@@ -1062,6 +1062,42 @@ class Device:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("phone_hangup:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def phone_pickup(self, session, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Picks up a call in an active session.
+
+        Use session id to select the session (phone_get and device.sessions to identify the session).
+        """
+        try:
+            command = self.session.post(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/call/answer?"
+                    + "session=" + str(session)
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id,
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("phone_pickup:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("phone_pickup:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("phone_pickup:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
 
