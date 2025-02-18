@@ -1397,3 +1397,58 @@ class Device:
             self.logit(self.padding("usercert_delete:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
+
+    def snapshot_download(self, width=None, height=None, source="internal", quality=90, time=0, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Retrieves a camera snapshot (JPEG image data is received).
+
+        Parameters:
+        width - the maximum available resolution is used when not specified. Use device.camera_resolutions to get available resolutions.
+        height - the maximum available resolution is used when not specified. Use device.camera_resolutions to get available resolutions.
+        source - internal source is used when not specified. Use device.camera_sources to get available sources.
+        quality - JPEG quality factor, 90 is used when not specified.
+        time - a time in the range 0 to -30 s. Older snapshots can be retrieved according to the specified time from the buffer. The most recent image is retrieved when not specified.
+        """
+        if not width:
+            width = self.camera_resolutions[-1]["width"]
+        if not height:
+            height = self.camera_resolutions[-1]["height"]
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/camera/snapshot?"
+                    + "width="
+                    + str(width)
+                    + "&height="
+                    + str(height)
+                    + "&source="
+                    + source
+                    + "&quality="
+                    + str(quality)
+                    + "&time="
+                    + str(time)
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            self.online = True
+            if command.headers["content-type"] == "image/jpeg":
+                self.logit(self.padding("snapshot_download:") + "success", "JPEG received", logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("snapshot_download:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return command.content
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("snapshot_download:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
