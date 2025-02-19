@@ -1,9 +1,10 @@
 import math
-
 import icecream as ic
 import requests
 import urllib3
 from requests.auth import HTTPDigestAuth
+from datetime import datetime
+from datetime import timedelta
 
 
 class Device:
@@ -36,7 +37,8 @@ class Device:
         self.phone_sessions = ["uninitialized"]
         self.camera_resolutions = ["uninitialized"]
         self.camera_sources = ["uninitialized"]
-        self.log_events = ["uninitialized"]
+        self.eventlog_event_types = ["uninitialized"]
+        self._eventlog_active_channels = dict()
 
         self._fixed_caps_get()
 
@@ -98,7 +100,7 @@ class Device:
                 self.logit(self.padding("init_fixed_caps_get:") + "success", command.text + "|" + command2.text, logging, verbose_success)
                 self.camera_resolutions = command.json()["result"]["jpegResolution"]
                 self.camera_sources = [source["source"] for source in command.json()["result"]["sources"]]
-                self.log_events = command2.json()["result"]["events"]
+                self.eventlog_event_types = command2.json()["result"]["events"]
             else:
                 if not self.assertion:
                     raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
@@ -1450,5 +1452,139 @@ class Device:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("snapshot_download:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def eventlog_active_channels_get(self) -> list:
+        """
+        Refreshes and returns the list of active eventlog channels with their details. The list contains dicts with keys:
+        "id" - channel id, use for channel management
+        "timestamp" - last time the channel was pulled (or created)
+        "duration" - duration of the channel
+
+        Do not retrieve device._eventlog_active_channels directly because it will not be refreshed.
+        """
+        trash = set()
+        for channel_id in self._eventlog_active_channels.keys():
+            age = datetime.now() - self._eventlog_active_channels[channel_id]["timestamp"]
+            if age >= timedelta(seconds=self._eventlog_active_channels[channel_id]["duration"]):
+                trash.add(channel_id)
+        for key in trash:
+            del self._eventlog_active_channels[key]
+        output = []
+        for channel_id in self._eventlog_active_channels.keys():
+            output.append(
+                {
+                    "id": channel_id,
+                    "duration": self._eventlog_active_channels[channel_id]["duration"],
+                    "timestamp": self._eventlog_active_channels[channel_id]["timestamp"],
+                    "events_list": self._eventlog_active_channels[channel_id]["events_list"],
+                }
+            )
+        return output
+
+    def eventlog_subscribe(self, events_list=None, duration=90, include="new", logging=True, verbose_success=False, verbose_failure=True) -> int:
+        """
+        Creates a subscription channel for event log.
+
+        - events_list = specify event types that will be added to this channel as a list. All event types that are not hidden are added if not specified. Explicite subscribe to a specific hidden event type to get it. Use string "all" to subscribe to all event types the device provides.
+        - duration = specify the duration of the subscription channel. It is automatically destroyed upon timeout if no new pull request is sent. 90 is assumed when not specified. Maximum duration is 3600 s.
+        - include = specify whether only new events (after the channel creation), all (also all events that are in the device's memory) or -t (also events that happened in t seconds before the channel creation) are included upon the channel creation. Only new are included when not specified.
+
+        Returns subsciption channel id (use it for channel management - pull or delete).
+        Adds active channel subscription into device._eventlog_active_channels. Use device.eventlog_active_channels_get() to retrieve currently active subscription channels. Expired channels are removed.
+        """
+        payload = "duration=" + str(duration) + "&include=" + str(include)
+        if events_list == "all":
+            payload += "&filter="
+            for event_type in self.eventlog_event_types:
+                payload += event_type + ","
+            payload = payload[:-1]
+        elif events_list:
+            payload += "&filter="
+            for event_type in events_list:
+                payload += event_type + ","
+            payload = payload[:-1]
+        else:
+            events_list = "all unhidden"
+        try:
+            command = self.session.post(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/log/subscribe?"
+                    + payload
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("eventlog_subscribe:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("eventlog_subscribe:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            self._eventlog_active_channels = {
+                command.json()["result"]["id"]:
+                    {
+                    "duration": duration,
+                    "timestamp": datetime.now(),
+                    "events_list": events_list
+                    }
+                }
+            return command.json()["result"]["id"]
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("eventlog_subscribe:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def eventlog_pull(self, id, timeout=None, logging=True, verbose_success=False, verbose_failure=True) -> list:
+        """
+        Retrieves contents (list) of an eventlog subscription channel. An empty list is retrieved when the channel has no new events to be pulled (even after timeout elapsed).
+
+        Use device.eventlog_active_channels_get() to retrieve currently active channels.
+        Do not retrieve device._eventlog_active_channels directly because it will not be refreshed.
+        """
+        if not timeout:
+            timeout = 0
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/log/pull?id="
+                    + str(id)
+                    + "&timeout="
+                    + str(timeout)
+                ),
+                timeout=timeout+1,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("eventlog_pull:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("eventlog_pull:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            self._eventlog_active_channels[id]["timestamp"] = datetime.now()
+            return command.json()["result"]["events"]
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("eventlog_pull:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
