@@ -1530,14 +1530,11 @@ class Device:
                 return False
 
             self.failure = None
-            self._eventlog_active_channels = {
-                command.json()["result"]["id"]:
-                    {
-                    "duration": duration,
-                    "timestamp": datetime.now(),
-                    "events_list": events_list
-                    }
-                }
+            self._eventlog_active_channels[command.json()["result"]["id"]] = {
+                "duration": duration,
+                "timestamp": datetime.now(),
+                "events_list": events_list
+            }
             return command.json()["result"]["id"]
         except Exception as e:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
@@ -1586,5 +1583,44 @@ class Device:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("eventlog_pull:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def eventlog_unsubscibe(self, id, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Deletes a subscription channel. Use this to free up resources or just let subscription channels expire.
+
+        Use device.eventlog_active_channels_get() to retrieve currently active channels.
+        Do not retrieve device._eventlog_active_channels directly because it will not be refreshed.
+        """
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/log/unsubscribe?id="
+                    + str(id)
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("eventlog_unsubscribe:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("eventlog_unsubscribe:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            del self._eventlog_active_channels[id]
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("eventlog_unsubscribe:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
