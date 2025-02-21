@@ -1,6 +1,7 @@
 import math
 import icecream as ic
 import requests
+import time
 import urllib3
 from requests.auth import HTTPDigestAuth
 from datetime import datetime
@@ -9,7 +10,7 @@ from datetime import timedelta
 
 class Device:
 
-    def __init__(self, ip: str, uname: str, pwd: str, timeout=5, assertion=False):
+    def __init__(self, ip: str, uname: str, pwd: str, timeout=5, assertion=False, logging=True):
         """
         Creates an instance of a 2N OS device.
         """
@@ -22,6 +23,7 @@ class Device:
         self.auth_id = HTTPDigestAuth(uname, pwd)
         self.timeout = timeout
         self.failure = None
+        self.logging = logging
 
         self.online = False
         self.uptime = math.inf
@@ -38,9 +40,13 @@ class Device:
         self.camera_resolutions = ["uninitialized"]
         self.camera_sources = ["uninitialized"]
         self.eventlog_event_types = ["uninitialized"]
+        self.audio_ok = None
+        self.last_audio_test_attempt = None
         self._eventlog_active_channels = dict()
 
+        self.logit(self.padding("internal_calls_start:") + "vvvvvvv", False, self.logging, False)
         self._fixed_caps_get()
+        self.logit(self.padding("internal_calls_end:") + "^^^^^^^", False, self.logging, False)
 
     def padding(self, text:str) -> str:
         """
@@ -66,12 +72,14 @@ class Device:
         elif logging:
             ic.ic(func)
 
-    def _fixed_caps_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def _fixed_caps_get(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves all capabilities of a device that are fixed.
 
         TODO: Test with a device without a camera support
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -116,11 +124,13 @@ class Device:
             self.failure = e
             return False
 
-    def info_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def info_get(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves basic information about the device (model, name, fw version
         and build type).
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -146,10 +156,12 @@ class Device:
             self.failure = e
             return False
 
-    def status_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def status_get(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves uptime of the device.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -181,7 +193,7 @@ class Device:
             self.failure = e
             return False
 
-    def switches_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def switches_get(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves number of switches, their states, operation mode and basic settings.
         switch - int, indicates number of the switch (indexed from 1, corresponds to the order in the list)
@@ -193,6 +205,8 @@ class Device:
         locked - bool, switch operation locked
         held - bool, switch operation held
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -241,7 +255,7 @@ class Device:
             self.failure = e
             return False
 
-    def switches_set(self, idx, action, hold_timeout=0, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def switches_set(self, idx, action, hold_timeout=0, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Controls the device switch (get available switches using device.switches).
         Available actions:
@@ -253,6 +267,8 @@ class Device:
         - hold: activate the switch indefinitely (or with defined hold_timeout)
         - release: release the switch hold
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -286,12 +302,14 @@ class Device:
             self.failure = e
             return False
 
-    def io_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def io_get(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves number of inputs and outputs and their states.
         Input information can be retrieved by getting device.inputs.
         Ouput information can be retrieved by getting device.outputs.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -350,11 +368,13 @@ class Device:
             self.failure = e
             return False
 
-    def config_download(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def config_download(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves the configuration file.
         XML is returned in case of success.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -385,10 +405,12 @@ class Device:
             self.failure = e
             return False
 
-    def config_upload(self, xml, password="", logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def config_upload(self, xml, password="", logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Uploads XML configuration file.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.put(
                 (
@@ -420,10 +442,12 @@ class Device:
             self.failure = e
             return False
 
-    def restart(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def restart(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Restarts the device.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -453,10 +477,12 @@ class Device:
             self.failure = e
             return False
 
-    def caps_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def caps_get(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves the system capabilities of the device.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -487,7 +513,7 @@ class Device:
             self.failure = e
             return False
 
-    def time_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def time_get(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves the device time and its settings.
         Time and its settings are returned as a directory:
@@ -495,6 +521,8 @@ class Device:
         "source":    string
         "automatic": bool
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -524,7 +552,7 @@ class Device:
             self.failure = e
             return False
 
-    def time_set(self, time=None, automatic=None, server=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def time_set(self, time=None, automatic=None, server=None, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Sets the device time and its settings.
         Time and its settings are entered as URL params:
@@ -533,6 +561,8 @@ class Device:
         automatic=int (0, 1)
         At least one parameter is mandatory.
         """
+        if logging == "default":
+            logging = self.logging
         payload = ""
         if time is not None:
             payload += "utcTime=" + str(time)
@@ -578,10 +608,12 @@ class Device:
             self.failure = e
             return False
 
-    def timezone_caps_get(self, logging=True, verbose_success=False, verbose_failure=True) -> list:
+    def timezone_caps_get(self, logging="default", verbose_success=False, verbose_failure=True) -> list:
         """
         Retrieves the device's list of supported standard timezones. A list is returned.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -611,13 +643,15 @@ class Device:
             self.failure = e
             return False
 
-    def timezone_get(self, logging=True, verbose_success=False, verbose_failure=True) -> dict:
+    def timezone_get(self, logging="default", verbose_success=False, verbose_failure=True) -> dict:
         """
         Retrieves the device's timezone settings.
         "automatic": boolean
         "zone": string
         "custom": string (None if the zone is not custom)
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -649,7 +683,7 @@ class Device:
             self.failure = e
             return False
 
-    def timezone_set(self, automatic=1, zone=None, custom=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def timezone_set(self, automatic=1, zone=None, custom=None, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Sets the device timezone and its settings.
         Timezone and its settings are entered as URL params:
@@ -659,6 +693,8 @@ class Device:
         Call the method without any parameters to set the automatic timezone mode.
         Call the method with zone (and custom) parameter to set manual timezone (timezone mode is automatically se to Manual, regardless of the automatic parameter)
         """
+        if logging == "default":
+            logging = self.logging
         payload = ""
         if zone is None:
             payload += "automatic=" + str(automatic)
@@ -701,7 +737,7 @@ class Device:
             self.failure = e
             return False
 
-    def firmware_upload(self, fw, direct=True, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def firmware_upload(self, fw, direct=True, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Uploads firmware binary file. Use direct to apply the firmware immediately (by default True).
         If direct=False => fwid, version, downgrade and upgrade warning is returned in a dict for individual handling.
@@ -714,6 +750,8 @@ class Device:
 
         The uploaded firmware is stored and can be confirmed for 30 s after the upload.
         """
+        if logging == "default":
+            logging = self.logging
         if type(fw) is not bytes:
             if not self.assertion:
                 raise Exception("assetion is enabled and the script failed with api error: Firmware must be in \"bytes\".")
@@ -761,10 +799,12 @@ class Device:
             self.failure = e
             return False
 
-    def firmware_confirm(self, fwid, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def firmware_confirm(self, fwid, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Confirms uploaded firmware file with fwid to be applied to the device.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.post(
                 (
@@ -794,10 +834,12 @@ class Device:
             self.failure = e
             return False
 
-    def firmware_reject(self, fwid, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def firmware_reject(self, fwid, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Rejects uploaded firmware file with fwid - another firmware file can be uploaded immediately.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.post(
                 (
@@ -827,11 +869,13 @@ class Device:
             self.failure = e
             return False
 
-    def factory_reset(self, sections=None, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def factory_reset(self, sections=None, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Reset the device to the factory default configuration.
         Using parameter sections=network all network parameters will be also reset. If the parameter is not specified, network parameters are not reset.
         """
+        if logging == "default":
+            logging = self.logging
         params = ""
         if sections == "network":
             params = "?sections=network"
@@ -864,7 +908,7 @@ class Device:
             self.failure = e
             return False
 
-    def phone_get(self, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def phone_get(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves status of SIP accounts and their calls (if there are any).
         List of accounts is populated. List of sessions is populated. Get them from the Device object.
@@ -895,6 +939,8 @@ class Device:
         - state (string: connecting, ringing, connected)
         Currently, there can be only one session in 2N OS devices. The list is empty if there is no session.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -955,7 +1001,7 @@ class Device:
             self.failure = e
             return False
 
-    def phone_set(self, payload, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def phone_set(self, payload, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Sets parameters of SIP accounts.
         Current configuration is retrieved and unchanged parameters are used from the configuration.
@@ -975,6 +1021,8 @@ class Device:
         - registrarAddress (string)
         - registrarPort (int, 0 means default port for individual SIP accounts)
         """
+        if logging == "default":
+            logging = self.logging
         keys = [
             "account",
             "enabled",
@@ -1033,7 +1081,7 @@ class Device:
             self.failure = e
             return False
 
-    def phone_dial(self, number=None, users=None, logging=True, verbose_success=False, verbose_failure=True) -> int:
+    def phone_dial(self, number=None, users=None, logging="default", verbose_success=False, verbose_failure=True) -> int:
         """
         Dials a number, user or list of users
         Exactly one parameter (numbers or users) is mandatory.
@@ -1042,6 +1090,8 @@ class Device:
 
         Returns the session identifier, which can be used for monitoring of the session with phone_get or to hang it up with phone_hangup.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             if number is not None and users is not None:
                 raise Exception("Exactly one parameter numbers or users is mandatory.")
@@ -1084,13 +1134,15 @@ class Device:
             self.failure = e
             return False
 
-    def phone_hangup(self, session, reason="normal", logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def phone_hangup(self, session, reason="normal", logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Hangs up a call in an active session.
 
         Use session id to select the session (phone_get and device.sessions to identify the session).
         Optionally, you can select the termination reason: normal (default), rejected, busy, noanswer.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.post(
                 (
@@ -1122,12 +1174,14 @@ class Device:
             self.failure = e
             return False
 
-    def phone_pickup(self, session, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def phone_pickup(self, session, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Picks up a call in an active session.
 
         Use session id to select the session (phone_get and device.sessions to identify the session).
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.post(
                 (
@@ -1158,13 +1212,15 @@ class Device:
             self.failure = e
             return False
 
-    def cacert_upload(self, cert, id="", logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def cacert_upload(self, cert, id="", logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Uploads a CA certificate.
 
         Use id without @ (it is automatically added).
         The certificate file is loaded as bytes object.
         """
+        if logging == "default":
+            logging = self.logging
         if id:
             id = "?id=@" + id
         if type(cert) is not bytes:
@@ -1205,12 +1261,14 @@ class Device:
             self.failure = e
             return False
 
-    def cacert_list(self, logging=True, verbose_success=False, verbose_failure=True) -> list:
+    def cacert_list(self, logging="default", verbose_success=False, verbose_failure=True) -> list:
         """
         Retrieves a list of CA certificates in the device.
 
         The list contains all information about certificates (see 2N HTTP API documentation for more information).
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -1241,13 +1299,15 @@ class Device:
             self.failure = e
             return False
 
-    def cacert_delete(self, id, logging=True, verbose_success=False, verbose_failure=True) -> list:
+    def cacert_delete(self, id, logging="default", verbose_success=False, verbose_failure=True) -> list:
         """
         Deletes a CA certificate.
 
         Get the id (or use the fingerprint as id) to select the certificate. Get the list of certificate by using carcert_list.
         If the id is entered externally (it is not retrieved from cacert_list), enter it with the prefix @.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.delete(
                 (
@@ -1279,13 +1339,15 @@ class Device:
             self.failure = e
             return False
 
-    def usercert_upload(self, cert, pk, id="", logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def usercert_upload(self, cert, pk, id="", logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Uploads a user certificate.
 
         Use id without @ (it is automatically added).
         The certificate and key file is loaded as bytes object.
         """
+        if logging == "default":
+            logging = self.logging
         if id:
             id = "?id=@" + id
         if type(cert) is not bytes or type(pk) is not bytes:
@@ -1326,12 +1388,14 @@ class Device:
             self.failure = e
             return False
 
-    def usercert_list(self, logging=True, verbose_success=False, verbose_failure=True) -> list:
+    def usercert_list(self, logging="default", verbose_success=False, verbose_failure=True) -> list:
         """
         Retrieves a list of user certificates in the device.
 
         The list contains all information about certificates (see 2N HTTP API documentation for more information).
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -1362,13 +1426,15 @@ class Device:
             self.failure = e
             return False
 
-    def usercert_delete(self, id, logging=True, verbose_success=False, verbose_failure=True) -> list:
+    def usercert_delete(self, id, logging="default", verbose_success=False, verbose_failure=True) -> list:
         """
         Deletes a user certificate.
 
         Get the id (or use the fingerprint as id) to select the certificate. Get the list of certificate by using usercert_list.
         If the id is entered externally (it is not retrieved from usercert_list), enter it with the prefix @.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.delete(
                 (
@@ -1400,7 +1466,7 @@ class Device:
             self.failure = e
             return False
 
-    def snapshot_download(self, width=None, height=None, source="internal", quality=90, time=0, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def snapshot_download(self, width=None, height=None, source="internal", quality=90, time=0, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Retrieves a camera snapshot (JPEG image data is received).
 
@@ -1411,6 +1477,8 @@ class Device:
         quality - JPEG quality factor, 90 is used when not specified.
         time - a time in the range 0 to -30 s. Older snapshots can be retrieved according to the specified time from the buffer. The most recent image is retrieved when not specified.
         """
+        if logging == "default":
+            logging = self.logging
         if not width:
             width = self.camera_resolutions[-1]["width"]
         if not height:
@@ -1483,7 +1551,7 @@ class Device:
             )
         return output
 
-    def eventlog_subscribe(self, events_list=None, duration=90, include="new", logging=True, verbose_success=False, verbose_failure=True) -> int:
+    def eventlog_subscribe(self, events_list=None, duration=90, include="new", logging="default", verbose_success=False, verbose_failure=True) -> int:
         """
         Creates a subscription channel for event log.
 
@@ -1494,6 +1562,8 @@ class Device:
         Returns subsciption channel id (use it for channel management - pull or delete).
         Adds active channel subscription into device._eventlog_active_channels. Use device.eventlog_active_channels_get() to retrieve currently active subscription channels. Expired channels are removed.
         """
+        if logging == "default":
+            logging = self.logging
         payload = "duration=" + str(duration) + "&include=" + str(include)
         if events_list == "all":
             payload += "&filter="
@@ -1543,13 +1613,15 @@ class Device:
             self.failure = e
             return False
 
-    def eventlog_pull(self, id, timeout=None, logging=True, verbose_success=False, verbose_failure=True) -> list:
+    def eventlog_pull(self, id, timeout=None, logging="default", verbose_success=False, verbose_failure=True) -> list:
         """
         Retrieves contents (list) of an eventlog subscription channel. An empty list is retrieved when the channel has no new events to be pulled (even after timeout elapsed).
 
-        Use device.eventlog_active_channels_get() to retrieve currently active channels.
+        Use device.eventlog_active_channels_get() to retrieve currently active channels. This is saved by the Device object and not retrieved from the device.
         Do not retrieve device._eventlog_active_channels directly because it will not be refreshed.
         """
+        if logging == "default":
+            logging = self.logging
         if not timeout:
             timeout = 0
         try:
@@ -1586,13 +1658,15 @@ class Device:
             self.failure = e
             return False
 
-    def eventlog_unsubscibe(self, id, logging=True, verbose_success=False, verbose_failure=True) -> bool:
+    def eventlog_unsubscibe(self, id, logging="default", verbose_success=False, verbose_failure=True) -> bool:
         """
         Deletes a subscription channel. Use this to free up resources or just let subscription channels expire.
 
         Use device.eventlog_active_channels_get() to retrieve currently active channels.
         Do not retrieve device._eventlog_active_channels directly because it will not be refreshed.
         """
+        if logging == "default":
+            logging = self.logging
         try:
             command = self.session.get(
                 (
@@ -1622,5 +1696,61 @@ class Device:
             assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
             self.offline_check(e)
             self.logit(self.padding("eventlog_unsubscribe:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def perform_audio_test(self, logging="default", verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Starts an audio test, subscribes an eventlog channel, gets the test result and unsubscribes the channel. The test takes 5 seconds.
+
+        Get the result of the last test result in device.audio_ok (None - uninitialized or test did not run properly, False - failed, True - passed). This is saved by the Device object and not retrieved from the device.
+        Get the time of the last test attempt (updated even when the test did not run properly) in device.last_audio_test_attempt. None if the test was never attempted. This is saved by the Device object and not retrieved from the device.
+        """
+        if logging == "default":
+            logging = self.logging
+        try:
+            assert "AudioLoopTest" in self.eventlog_event_types, "The device does not support Audio Loop Test or was not initialized properly."
+            self.logit(self.padding("internal_calls_start:") + "vvvvvvv", "", logging, False)
+            log_id = self.eventlog_subscribe(["AudioLoopTest"], 10)
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/audio/test"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+            time.sleep(5)
+            events = self.eventlog_pull(log_id)
+            for event in events[::-1]:
+                if event["params"]["result"] == "passed":
+                    self.audio_ok = True
+                    break
+                elif event["params"]["result"] == "failed":
+                    self.audio_ok = False
+                    break
+                else:
+                    self.audio_ok = None
+            self.last_audio_test_attempt = datetime.now()
+            self.eventlog_unsubscibe(log_id)
+            self.logit(self.padding("internal_calls_end:") + "^^^^^^^", False, logging, False)
+
+            if command.json()["success"]:
+                self.logit(self.padding("perform_audio_test:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("perform_audio_test:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("perform_audio_test:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
