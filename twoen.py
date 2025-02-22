@@ -1836,3 +1836,47 @@ class Device:
             self.logit(self.padding("ap_block_control:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
+
+    def ap_grant_access(self, id, uuid, logging=None, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Grants access to a selected user (uuid) on the specified accesspoint (id = 0 or 1).
+
+        There are the following reasons why it might fail:
+        - invalidAp - accesspoint is disabled
+        - invalidCredential - user does not exist or does not have rights
+        - accessBlocked - accesspoint is blocked at the time
+        """
+        if logging is None:
+            logging = self.logging
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/accesspoint/grantaccess?id="
+                    + str(id)
+                    + "&user="
+                    + uuid
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"] and command.json().get("result").get("accessGranted") is True:
+                self.logit(self.padding("ap_grant_access:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("ap_grant_access:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("ap_grant_access:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
