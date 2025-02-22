@@ -1754,3 +1754,85 @@ class Device:
             self.logit(self.padding("perform_audio_test:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
+
+    def ap_block_control(self, id, action, logging=None, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Switches on or off (action = "on" or "off") the access point blocking for the selected access point (id = 0 or 1).
+
+        Use device.ap_block_status() to retrieve the current blocking status.
+        """
+        if logging is None:
+            logging = self.logging
+        try:
+            command = self.session.post(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/accesspoint/blocking/ctrl?id="
+                    + str(id)
+                    + "&action="
+                    + action
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("ap_block_control:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("ap_block_control:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("ap_block_control:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def ap_block_status(self, logging=None, verbose_success=False, verbose_failure=True) -> list:
+        """
+        Retrieves the status of blocking on both accesspoints.
+
+        List is returned with values of True or False for each accesspoint
+        """
+        if logging is None:
+            logging = self.logging
+        try:
+            command = self.session.post(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/accesspoint/blocking/status"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("ap_block_status:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("ap_block_status:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            output = []
+            for idx in range(2):
+                output.append(command.json()["result"]["accessPoints"][idx]["blocked"])
+            return output
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("ap_block_control:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
