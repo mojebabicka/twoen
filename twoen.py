@@ -1880,3 +1880,40 @@ class Device:
             self.logit(self.padding("ap_grant_access:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
+
+    def automation_trigger(self, id, logging=None, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Triggers the automation event block with the specified id.
+        """
+        if logging is None:
+            logging = self.logging
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/automation/trigger?triggerId="
+                    + str(id)
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("automation_trigger:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("automation_trigger:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("automation_trigger:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
