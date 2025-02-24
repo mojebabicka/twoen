@@ -1917,3 +1917,100 @@ class Device:
             self.logit(self.padding("automation_trigger:") + "general failure", e, logging, verbose_failure)
             self.failure = e
             return False
+
+    def licenseplate_send(self, lpruuid, reading_id, ap, plate_text, direction, plate_image=None, logging=None, verbose_success=False, verbose_failure=True) -> bool:
+        """
+        Sends license plate recognition information.
+
+        Use the following parameters:
+        - lpruuid - unique identifier of the recognized plateText
+        - reading_id - unique identifier of the reading event (subsequent requests with the same reading_id are considered as updates of the previous reading, useful when invalid readings buffer is switched on in the device)
+        - ap - definecs which access point is used for access rules evaluation for the sent license plate
+        - plate_text - the characters identified from the image analysis (1 .. 12 characters)
+        - direction - identified direction of the vehicle motion (0 - unknown, 1 - undefined/not supported, 2 - incoming, 3 - outgoing)
+        - plateImage - image encoded in base64 string (the maximum size is 256 kB)
+        """
+        if logging is None:
+            logging = self.logging
+        try:
+            payload = {
+                "lprUuid": lpruuid,
+                "lprID": reading_id,
+                "accessPoint": ap,
+                "plateText": plate_text,
+                "lprDir": direction,
+            }
+            if plate_image is not None:
+                payload["plateImage"] = plate_image
+            command = self.session.post(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/lpr/licenseplate"
+                ),
+                timeout=self.timeout,
+                verify=False,
+                json=payload,
+                auth=self.auth_id
+            )
+
+            if command.json()["success"]:
+                self.logit(self.padding("licenseplate_send:") + "success", command.text, logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("licenseplate_send:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+
+            self.failure = None
+            return True
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("licenseplate_send:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
+
+    def licenseplate_image_download(self, plate_text, logging=None, verbose_success=False, verbose_failure=True):
+        """
+        Retrieves a license plate image according to the specified license plate text.
+
+        Parameters:
+        plate_text - specify the plate text that was identified in a reading (the newest image is returned if more than one reading with the same license plate text occured).
+
+        Up to five images are stored in the device.
+        """
+        if logging is None:
+            logging = self.logging
+        try:
+            command = self.session.get(
+                (
+                    "https://"
+                    + self.ip
+                    + "/api/lpr/image?"
+                    + "plateText="
+                    + plate_text
+                ),
+                timeout=self.timeout,
+                verify=False,
+                auth=self.auth_id
+            )
+
+            self.online = True
+            if command.headers["content-type"] == "image/jpeg":
+                self.logit(self.padding("licenseplate_image_download:") + "success", "image received", logging, verbose_success)
+            else:
+                if not self.assertion:
+                    raise Exception(f"assetion is enabled and the script failed with api error: {command.text}")
+                self.logit(self.padding("licenseplate_image_download:") + "api error", command.text, logging, verbose_failure)
+                self.failure = command.text
+                return False
+            self.failure = None
+            return command.content
+        except Exception as e:
+            assert self.assertion, f"assetion is enabled and the script failed with general failure: {e}"
+            self.offline_check(e)
+            self.logit(self.padding("lilcenseplate_image_download:") + "general failure", e, logging, verbose_failure)
+            self.failure = e
+            return False
